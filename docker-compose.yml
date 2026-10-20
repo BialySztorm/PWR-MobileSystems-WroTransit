@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: wrotransit
+      POSTGRES_USER: wrotransit
+      POSTGRES_PASSWORD: wrotransit
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://db/wrotransit
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  ingest:
+    build:
+      context: ./backend
+    command: ["python", "-c", "print('Ingest service skeleton')"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://db/wrotransit
+    depends_on:
+      - db
+
+volumes:
+  pgdata:

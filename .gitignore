@@ -1,0 +1,28 @@
+# Flutter
+app/.dart_tool/
+app/.packages
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.metadata
+app/build/
+app/.idea/
+app/.vscode/
+app/ios/Flutter/Flutter.framework
+app/ios/Flutter/Flutter.podspec
+
+# Python
+__pycache__/
+backend/.pytest_cache/
+backend/.venv/
+backend/*.egg-info/
+*.pyc
+
+# Environment
+.env
+
+# GTFS archives
+*.gtfs.zip
+*.gtfs
+
+# OS artifacts
+.DS_Store
