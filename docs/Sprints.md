@@ -1,7 +1,7 @@
 # WroTransit – plan sprintów
 
 Harmonogram według kursu na ePortalu. Każdy sprint kończy się raportem (LaTeX, szablon PWr)
-i tagiem `sprint-N` na `main`. Szczegóły techniczne: [ZALOZENIA.md](ZALOZENIA.md).
+i tagiem `sprint-N` na `main`. Szczegóły techniczne: [Specifications.md](Specifications.md).
 
 Oznaczenia: **[I]** Igor, **[A]** Andrzej, **[I+A]** wspólnie.
 
