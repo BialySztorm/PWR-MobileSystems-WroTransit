@@ -13,15 +13,15 @@ class RouteStop {
 }
 
 class LineRoute {
-  const LineRoute({required this.id, required this.lineId, required this.stops});
+  const LineRoute({required this.routeId, required this.directionId, required this.stops});
 
-  final int id;
-  final int lineId;
+  final String routeId;
+  final int? directionId;
   final List<RouteStop> stops;
 
   factory LineRoute.fromJson(Map<String, dynamic> json) => LineRoute(
-        id: json['id'] as int,
-        lineId: json['line_id'] as int,
+        routeId: json['route_id'] as String,
+        directionId: json['direction_id'] as int?,
         stops: (json['stops'] as List<dynamic>)
             .map((e) => RouteStop.fromJson(e as Map<String, dynamic>))
             .toList(),

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/providers.dart';
-import '../../lines/data/models/line.dart';
+import 'models/departure.dart';
 import 'models/stop.dart';
 
 class StopsRepository {
@@ -9,35 +9,47 @@ class StopsRepository {
 
   final Ref _ref;
 
-  Future<List<Stop>> getStops() async {
+  Future<List<Stop>> getStops({String? query}) async {
     final api = _ref.read(apiClientProvider);
-    final list = await api.getList('/stops');
+    final list = await api.getList(
+      '/stops',
+      query: (query == null || query.isEmpty) ? null : {'q': query},
+    );
     return list.map((e) => Stop.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<Stop> getStop(int id) async {
+  Future<List<Stop>> getStopsInBbox(String bbox) async {
+    final api = _ref.read(apiClientProvider);
+    final list = await api.getList('/stops', query: {'bbox': bbox});
+    return list.map((e) => Stop.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<Stop> getStop(String id) async {
     final api = _ref.read(apiClientProvider);
     final json = await api.get('/stops/$id');
     return Stop.fromJson(json as Map<String, dynamic>);
   }
 
-  Future<List<Line>> getLinesForStop(int id) async {
+  Future<List<Departure>> getDepartures(String stopId) async {
     final api = _ref.read(apiClientProvider);
-    final list = await api.getList('/stops/$id/lines');
-    return list.map((e) => Line.fromJson(e as Map<String, dynamic>)).toList();
+    final list = await api.getList('/stops/$stopId/departures');
+    return list.map((e) => Departure.fromJson(e as Map<String, dynamic>)).toList();
   }
 }
 
 final stopsRepositoryProvider = Provider<StopsRepository>((ref) => StopsRepository(ref));
 
+final stopsSearchQueryProvider = StateProvider<String>((ref) => '');
+
 final stopsListProvider = FutureProvider<List<Stop>>((ref) {
-  return ref.read(stopsRepositoryProvider).getStops();
+  final query = ref.watch(stopsSearchQueryProvider);
+  return ref.read(stopsRepositoryProvider).getStops(query: query);
 });
 
-final stopProvider = FutureProvider.family<Stop, int>((ref, id) {
+final stopProvider = FutureProvider.family<Stop, String>((ref, id) {
   return ref.read(stopsRepositoryProvider).getStop(id);
 });
 
-final stopLinesProvider = FutureProvider.family<List<Line>, int>((ref, id) {
-  return ref.read(stopsRepositoryProvider).getLinesForStop(id);
+final stopDeparturesProvider = FutureProvider.family<List<Departure>, String>((ref, stopId) {
+  return ref.read(stopsRepositoryProvider).getDepartures(stopId);
 });

@@ -12,12 +12,9 @@ class FavouritesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final favourites = ref.watch(favouritesControllerProvider);
     final favouriteStopIds =
-        favourites.where((f) => f.kind == FavouriteKind.stop).map((f) => f.id).toSet();
+        favourites.where((f) => f.kind == FavouriteKind.stop).map((f) => f.id).toList();
     final favouriteLineIds =
-        favourites.where((f) => f.kind == FavouriteKind.line).map((f) => f.id).toSet();
-
-    final stopsAsync = ref.watch(stopsListProvider);
-    final linesAsync = ref.watch(linesListProvider);
+        favourites.where((f) => f.kind == FavouriteKind.line).map((f) => f.id).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Favourites')),
@@ -27,54 +24,67 @@ class FavouritesScreen extends ConsumerWidget {
             padding: EdgeInsets.all(16),
             child: Text('Stops', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
-          stopsAsync.when(
-            loading: () => const LinearProgressIndicator(),
-            error: (error, _) => Text('Failed to load stops: $error'),
-            data: (stops) {
-              final favouriteStops =
-                  stops.where((s) => favouriteStopIds.contains(s.id)).toList();
-              if (favouriteStops.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('No favourite stops yet.'),
-                );
-              }
-              return Column(
-                children: [
-                  for (final stop in favouriteStops)
-                    ListTile(leading: const Icon(Icons.place), title: Text(stop.name)),
-                ],
-              );
-            },
-          ),
+          if (favouriteStopIds.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text('No favourite stops yet.'),
+            )
+          else
+            for (final stopId in favouriteStopIds) _FavouriteStopTile(stopId: stopId),
           const Padding(
             padding: EdgeInsets.all(16),
             child: Text('Lines', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
-          linesAsync.when(
-            loading: () => const LinearProgressIndicator(),
-            error: (error, _) => Text('Failed to load lines: $error'),
-            data: (lines) {
-              final favouriteLines =
-                  lines.where((l) => favouriteLineIds.contains(l.id)).toList();
-              if (favouriteLines.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('No favourite lines yet.'),
-                );
-              }
-              return Column(
-                children: [
-                  for (final line in favouriteLines)
-                    ListTile(
-                      leading: const Icon(Icons.directions_bus),
-                      title: Text('${line.code} · ${line.name}'),
-                    ),
-                ],
-              );
-            },
-          ),
+          if (favouriteLineIds.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text('No favourite lines yet.'),
+            )
+          else
+            for (final lineId in favouriteLineIds) _FavouriteLineTile(lineId: lineId),
         ],
+      ),
+    );
+  }
+}
+
+class _FavouriteStopTile extends ConsumerWidget {
+  const _FavouriteStopTile({required this.stopId});
+
+  final String stopId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stopAsync = ref.watch(stopProvider(stopId));
+    return stopAsync.when(
+      loading: () => const ListTile(leading: Icon(Icons.place), title: Text('Loading...')),
+      error: (error, _) => ListTile(
+        leading: const Icon(Icons.place),
+        title: Text('Failed to load stop: $error'),
+      ),
+      data: (stop) => ListTile(leading: const Icon(Icons.place), title: Text(stop.name)),
+    );
+  }
+}
+
+class _FavouriteLineTile extends ConsumerWidget {
+  const _FavouriteLineTile({required this.lineId});
+
+  final String lineId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lineAsync = ref.watch(lineProvider(lineId));
+    return lineAsync.when(
+      loading: () =>
+          const ListTile(leading: Icon(Icons.directions_bus), title: Text('Loading...')),
+      error: (error, _) => ListTile(
+        leading: const Icon(Icons.directions_bus),
+        title: Text('Failed to load line: $error'),
+      ),
+      data: (line) => ListTile(
+        leading: Icon(line.isTram ? Icons.tram : Icons.directions_bus),
+        title: Text('${line.shortName} · ${line.longName ?? line.shortName}'),
       ),
     );
   }

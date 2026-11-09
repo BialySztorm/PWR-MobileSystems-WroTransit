@@ -37,7 +37,7 @@ class AppRouter {
                   GoRoute(
                     path: ':id',
                     builder: (context, state) => StopDetailScreen(
-                      stopId: int.parse(state.pathParameters['id']!),
+                      stopId: state.pathParameters['id']!,
                     ),
                   ),
                 ],
@@ -53,7 +53,7 @@ class AppRouter {
                   GoRoute(
                     path: ':id',
                     builder: (context, state) => LineDetailScreen(
-                      lineId: int.parse(state.pathParameters['id']!),
+                      lineId: state.pathParameters['id']!,
                     ),
                   ),
                 ],
@@ -91,26 +91,20 @@ class _RootScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: navigationShell.currentIndex,
-        onTap: (index) {
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: navigationShell.currentIndex,
+        onDestinationSelected: (index) {
           navigationShell.goBranch(
             index,
             initialLocation: index == navigationShell.currentIndex,
           );
         },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),
-          BottomNavigationBarItem(icon: Icon(Icons.place), label: 'Stops'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.directions_bus),
-            label: 'Lines',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.favorite),
-            label: 'Favourites',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.map), label: 'Map'),
+          NavigationDestination(icon: Icon(Icons.place), label: 'Stops'),
+          NavigationDestination(icon: Icon(Icons.directions_bus), label: 'Lines'),
+          NavigationDestination(icon: Icon(Icons.favorite), label: 'Favourites'),
+          NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
     );

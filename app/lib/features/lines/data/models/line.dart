@@ -1,20 +1,22 @@
 class Line {
   const Line({
-    required this.id,
-    required this.code,
-    required this.name,
-    this.color,
+    required this.routeId,
+    required this.shortName,
+    required this.longName,
+    required this.type,
   });
 
-  final int id;
-  final String code;
-  final String name;
-  final String? color;
+  final String routeId;
+  final String shortName;
+  final String? longName;
+  final int type;
+
+  bool get isTram => type == 0;
 
   factory Line.fromJson(Map<String, dynamic> json) => Line(
-        id: json['id'] as int,
-        code: json['code'] as String,
-        name: json['name'] as String,
-        color: json['color'] as String?,
+        routeId: json['route_id'] as String,
+        shortName: json['short_name'] as String,
+        longName: json['long_name'] as String?,
+        type: json['type'] as int,
       );
 }

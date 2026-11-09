@@ -6,12 +6,12 @@ import '../data/stops_repository.dart';
 class StopDetailScreen extends ConsumerWidget {
   const StopDetailScreen({super.key, required this.stopId});
 
-  final int stopId;
+  final String stopId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stopAsync = ref.watch(stopProvider(stopId));
-    final linesAsync = ref.watch(stopLinesProvider(stopId));
+    final departuresAsync = ref.watch(stopDeparturesProvider(stopId));
 
     return Scaffold(
       appBar: AppBar(
@@ -21,27 +21,33 @@ class StopDetailScreen extends ConsumerWidget {
           error: (_, __) => const Text('Stop'),
         ),
       ),
-      body: linesAsync.when(
+      body: departuresAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Failed to load lines: $error')),
-        data: (lines) => ListView(
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Lines serving this stop', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-            if (lines.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text('No lines found for this stop.'),
-              ),
-            for (final line in lines)
-              ListTile(
-                leading: const Icon(Icons.directions_bus),
-                title: Text('${line.code} · ${line.name}'),
-              ),
-          ],
-        ),
+        error: (error, _) => Center(child: Text('Failed to load departures: $error')),
+        data: (departures) {
+          if (departures.isEmpty) {
+            return const Center(child: Text('No upcoming departures.'));
+          }
+          return ListView.builder(
+            itemCount: departures.length,
+            itemBuilder: (context, index) {
+              final departure = departures[index];
+              return ListTile(
+                leading: CircleAvatar(
+                  child: Icon(departure.isTram ? Icons.tram : Icons.directions_bus),
+                ),
+                title: Text(
+                  '${departure.routeShortName}'
+                  '${departure.headsign != null ? ' → ${departure.headsign}' : ''}',
+                ),
+                trailing: Text(
+                  departure.formattedTime,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

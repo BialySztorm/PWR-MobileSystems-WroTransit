@@ -6,7 +6,7 @@ class FavouriteId {
   const FavouriteId(this.kind, this.id);
 
   final FavouriteKind kind;
-  final int id;
+  final String id;
 
   @override
   bool operator ==(Object other) =>
@@ -19,9 +19,9 @@ class FavouriteId {
 class FavouritesController extends StateNotifier<Set<FavouriteId>> {
   FavouritesController() : super(<FavouriteId>{});
 
-  bool isFavourite(FavouriteKind kind, int id) => state.contains(FavouriteId(kind, id));
+  bool isFavourite(FavouriteKind kind, String id) => state.contains(FavouriteId(kind, id));
 
-  void toggle(FavouriteKind kind, int id) {
+  void toggle(FavouriteKind kind, String id) {
     final favouriteId = FavouriteId(kind, id);
     final next = Set<FavouriteId>.from(state);
     if (!next.remove(favouriteId)) {

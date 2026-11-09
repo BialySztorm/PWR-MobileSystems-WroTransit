@@ -8,7 +8,7 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: WroTransitApp()));
     await tester.pump();
 
-    expect(find.byType(BottomNavigationBar), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.text('Map'), findsOneWidget);
     expect(find.text('Stops'), findsOneWidget);
     expect(find.text('Lines'), findsOneWidget);

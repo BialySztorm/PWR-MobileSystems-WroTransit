@@ -8,11 +8,11 @@ class VehiclesRepository {
 
   final Ref _ref;
 
-  Future<List<Vehicle>> getVehicles({int? lineId}) async {
+  Future<List<Vehicle>> getVehicles({String? line}) async {
     final api = _ref.read(apiClientProvider);
     final list = await api.getList(
       '/vehicles',
-      query: lineId == null ? null : {'line_id': '$lineId'},
+      query: line == null ? null : {'line': line},
     );
     return list.map((e) => Vehicle.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -21,6 +21,6 @@ class VehiclesRepository {
 final vehiclesRepositoryProvider =
     Provider<VehiclesRepository>((ref) => VehiclesRepository(ref));
 
-final vehiclesForLineProvider = FutureProvider.family<List<Vehicle>, int>((ref, lineId) {
-  return ref.read(vehiclesRepositoryProvider).getVehicles(lineId: lineId);
+final vehiclesForLineProvider = FutureProvider.family<List<Vehicle>, String>((ref, line) {
+  return ref.read(vehiclesRepositoryProvider).getVehicles(line: line);
 });
