@@ -3,7 +3,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/profile_screen.dart';
 import '../../features/favourites/presentation/favourites_screen.dart';
+import '../../features/lines/presentation/line_detail_screen.dart';
+import '../../features/lines/presentation/lines_screen.dart';
 import '../../features/map/presentation/map_screen.dart';
+import '../../features/stops/presentation/stop_detail_screen.dart';
 import '../../features/stops/presentation/stops_screen.dart';
 
 class AppRouter {
@@ -30,6 +33,30 @@ class AppRouter {
               GoRoute(
                 path: '/stops',
                 builder: (context, state) => const StopsScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    builder: (context, state) => StopDetailScreen(
+                      stopId: int.parse(state.pathParameters['id']!),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/lines',
+                builder: (context, state) => const LinesScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    builder: (context, state) => LineDetailScreen(
+                      lineId: int.parse(state.pathParameters['id']!),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -75,6 +102,10 @@ class _RootScaffold extends StatelessWidget {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),
           BottomNavigationBarItem(icon: Icon(Icons.place), label: 'Stops'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.directions_bus),
+            label: 'Lines',
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.favorite),
             label: 'Favourites',
