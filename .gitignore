@@ -16,6 +16,7 @@ backend/.pytest_cache/
 backend/.venv/
 /.venv/
 backend/*.egg-info/
+backend/uv.lock
 *.pyc
 
 # Environment
