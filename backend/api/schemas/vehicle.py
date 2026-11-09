@@ -1,14 +1,12 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
-class VehicleRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    line_id: int
-    label: str
-    lat: float
-    lon: float
-    updated_at: datetime
+class VehicleStateRead(BaseModel):
+    vehicle_id: str
+    line: str | None
+    lat: float | None
+    lon: float | None
+    recorded_at: datetime | None
+    delay_s: int | None

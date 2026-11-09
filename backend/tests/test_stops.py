@@ -1,19 +1,41 @@
 from fastapi.testclient import TestClient
+from geoalchemy2.elements import WKTElement
 from sqlalchemy.orm import Session
 
-from api.models.line import Line
-from api.models.route import Route, RouteStop
 from api.models.stop import Stop
 
 
-def test_list_stops_returns_seeded_stop(client: TestClient, db_session: Session) -> None:
-    db_session.add(Stop(name="Rynek", lat=51.1101, lon=17.0326))
+def _make_stop(stop_id: str, name: str, lat: float, lon: float) -> Stop:
+    return Stop(
+        stop_id=stop_id,
+        stop_code=stop_id,
+        name=name,
+        geom=WKTElement(f"POINT({lon} {lat})", srid=4326),
+    )
+
+
+def test_list_stops_filters_by_query(client: TestClient, db_session: Session) -> None:
+    db_session.add_all(
+        [
+            _make_stop("1", "Rynek", 51.1101, 17.0326),
+            _make_stop("2", "Renoma", 51.1075, 17.0281),
+        ]
+    )
     db_session.commit()
 
-    response = client.get("/stops")
+    response = client.get("/stops?q=rynek")
 
     assert response.status_code == 200
-    assert response.json() == [{"id": 1, "name": "Rynek", "lat": 51.1101, "lon": 17.0326}]
+    body = response.json()
+    assert len(body) == 1
+    assert body[0] == {
+        "stop_id": "1",
+        "stop_code": "1",
+        "name": "Rynek",
+        "lat": 51.1101,
+        "lon": 17.0326,
+        "modes": [],
+    }
 
 
 def test_get_stop_not_found_returns_404(client: TestClient) -> None:
@@ -22,21 +44,28 @@ def test_get_stop_not_found_returns_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
-def test_get_stop_lines_returns_lines_serving_stop(
+def test_list_stops_with_bbox_returns_served_modes(
     client: TestClient, db_session: Session
 ) -> None:
-    stop = Stop(name="Rynek", lat=51.11, lon=17.03)
-    line = Line(code="A", name="Linia A", color=None)
-    db_session.add_all([stop, line])
-    db_session.flush()
+    from api.models.route import Route
+    from api.models.stop_time import StopTime
+    from api.models.trip import Trip
 
-    route = Route(line_id=line.id)
-    db_session.add(route)
+    db_session.add_all(
+        [
+            _make_stop("1", "Rynek", 51.1101, 17.0326),
+            Route(route_id="4", short_name="4", long_name=None, type=0),
+            Trip(trip_id="t1", route_id="4", service_id="s1", direction_id=0, headsign=None),
+        ]
+    )
     db_session.flush()
-    db_session.add(RouteStop(route_id=route.id, stop_id=stop.id, sequence=0))
+    db_session.add(
+        StopTime(trip_id="t1", stop_sequence=0, stop_id="1", arrival_time_s=0, departure_time_s=0)
+    )
     db_session.commit()
 
-    response = client.get(f"/stops/{stop.id}/lines")
+    response = client.get("/stops?bbox=17.00,51.09,17.06,51.13")
 
     assert response.status_code == 200
-    assert [l["code"] for l in response.json()] == ["A"]
+    body = response.json()
+    assert body[0]["modes"] == [0]

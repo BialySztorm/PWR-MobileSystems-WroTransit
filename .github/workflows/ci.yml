@@ -26,6 +26,22 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: wrotransit_test
+          POSTGRES_USER: wrotransit
+          POSTGRES_PASSWORD: wrotransit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://wrotransit:wrotransit@localhost:5432/wrotransit_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

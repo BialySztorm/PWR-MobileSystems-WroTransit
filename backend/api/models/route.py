@@ -1,5 +1,5 @@
-from sqlalchemy import ForeignKey, Integer
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
 
 from api.models.base import Base
 
@@ -7,20 +7,8 @@ from api.models.base import Base
 class Route(Base):
     __tablename__ = "routes"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    line_id: Mapped[int] = mapped_column(ForeignKey("lines.id"))
-
-    stops: Mapped[list["RouteStop"]] = relationship(
-        back_populates="route", order_by="RouteStop.sequence"
-    )
-
-
-class RouteStop(Base):
-    __tablename__ = "route_stops"
-
-    route_id: Mapped[int] = mapped_column(ForeignKey("routes.id"), primary_key=True)
-    stop_id: Mapped[int] = mapped_column(ForeignKey("stops.id"), primary_key=True)
-    sequence: Mapped[int] = mapped_column(Integer)
-
-    route: Mapped[Route] = relationship(back_populates="stops")
-    stop: Mapped["Stop"] = relationship()
+    route_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    short_name: Mapped[str] = mapped_column(String(16))
+    long_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    type: Mapped[int] = mapped_column(Integer)
+    """GTFS route_type: 0 = tram, 3 = bus (others are unused by this feed)."""
