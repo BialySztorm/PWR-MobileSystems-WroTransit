@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration name="Dev: DB + Backend API + App" type="CompoundRunConfigurationType">
+    <toRun name="Docker Compose: db" type="docker-deploy" />
+    <toRun name="Backend API (uvicorn)" type="PythonConfigurationType" />
+    <toRun name="Flutter App" type="FlutterRunConfigurationType" />
+    <method v="2" />
+  </configuration>
+</component>
