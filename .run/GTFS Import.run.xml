@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Seed Data" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="GTFS Import" type="PythonConfigurationType" factoryName="Python">
     <module name="wrotransit-backend" />
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
@@ -16,11 +16,11 @@
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
     <option name="RUN_TOOL" value="true" />
     <option name="RUN_AS_SCRIPT" value="false" />
-    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/backend/scripts/seed_data.py" />
+    <option name="SCRIPT_NAME" value="ingest.gtfs_import" />
     <option name="PARAMETERS" value="" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
-    <option name="MODULE_MODE" value="false" />
+    <option name="MODULE_MODE" value="true" />
     <option name="REDIRECT_INPUT" value="false" />
     <option name="INPUT_FILE" value="" />
     <method v="2" />

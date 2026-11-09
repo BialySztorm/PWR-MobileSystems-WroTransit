@@ -46,27 +46,27 @@ Oznaczenia: **[I]** Igor, **[A]** Andrzej, **[I+A]** wspólnie.
 **Cel kursu:** podstawowy interfejs, nawigacja, model danych.
 
 **Aplikacja [I]**
-- [ ] Ekran mapy: `flutter_map`, OSM, centrum na Wrocławiu, przyciski filtra tramwaj/autobus — mapa gotowa (od Sprintu 1), **brak** przycisków filtra tramwaj/autobus
-- [ ] Ekran wyszukiwania przystanków i linii (na razie na danych testowych) — są listy Stops/Lines, ale **na prawdziwym API**, nie na danych testowych, i **bez pola wyszukiwania** (samo listowanie)
-- [ ] Ekran tablicy odjazdów (layout z makiety, dane testowe) — **nie zrobione**
+- [x] Ekran mapy: `flutter_map`, OSM, centrum na Wrocławiu, przyciski filtra tramwaj/autobus — lepiej niż wymagane: realne znaczniki przystanków i narysowane trasy linii w widocznym obszarze mapy (`?bbox=` na `/stops` i `/shapes`), przełącznik Tramwaje/Autobusy realnie filtruje narysowane trasy po `route_type`; pojazdy na mapie zostają Sprintem 3 (brak jeszcze danych z pollingu)
+- [x] Ekran wyszukiwania przystanków i linii — pole wyszukiwania (debounce 300 ms) nad listami Stops/Lines, `?q=` na `/stops` i `/routes`; na prawdziwym API, nie na danych testowych
+- [x] Ekran tablicy odjazdów — `StopDetailScreen` pokazuje realne odjazdy z `/stops/{id}/departures` (linia, kierunek, godzina); pociągnięte przed grafik z Sprintu 3 (`/stops/{id}/departures`), bo model już to wspiera
 - [x] Ekran przebiegu linii (layout, dane testowe) — `LineDetailScreen`, uporządkowana lista przystanków; dane z prawdziwego API, nie testowe
-- [x] Nawigacja między ekranami zgodnie z user flow — dodana zakładka Lines + trasy szczegółów `/stops/:id`, `/lines/:id` (brak spisanego user flow z Sprintu 1 do porównania 1:1)
-- [ ] Modele danych po stronie aplikacji (Dart): `Stop`, `Line`, `Vehicle`, `Departure` — `Stop`, `Line`, `Vehicle`, `RouteStop`/`LineRoute` gotowe; **brak `Departure`**
-- [ ] Lokalizacja użytkownika na mapie (`geolocator`, obsługa uprawnień) — **nie zrobione**, `geolocator` nie jest nawet w `pubspec.yaml`
+- [x] Nawigacja między ekranami zgodnie z user flow — zakładka Lines + trasy szczegółów `/stops/:id`, `/lines/:id`, zgodne z diagramem w `docs/MSI_Sprint_1_report.pdf`
+- [x] Modele danych po stronie aplikacji (Dart): `Stop`, `Line`, `Vehicle`, `Departure` — wszystkie gotowe (`lib/features/*/data/models/`)
+- [x] Lokalizacja użytkownika na mapie (`geolocator`, obsługa uprawnień) — przycisk lokalizacji, obsługa odmowy uprawnień/wyłączonej usługi, niebieski znacznik + recentrowanie
 
 **Backend i dane [A]**
-- [ ] Migracje Alembic: tabele GTFS z geometrią PostGIS (`stops`, `routes`, `trips`, `stop_times`, `shapes`, `calendar*`) — zrobiony **uproszczony** model (`Stop`, `Line`, `Route`/`RouteStop`, `Vehicle`), lat/lon jako `Float`, **bez typu PostGIS Geometry** i **bez** `trips`/`stop_times`/`shapes`/`calendar*` — realny GTFS schema zostaje do zrobienia
-- [ ] Migracje: `vehicle_positions`, `vehicle_state`, `users`, `favourite_*`, `devices` — jest tylko uproszczona tabela `vehicles`; **brak** `users`/`favourite_*`/`devices` (ulubione na razie tylko w pamięci apki, bez backendu)
-- [ ] Indeksy przestrzenne (GIST) na `stops.geom`, `shapes.geom` — **nie zrobione** (nie ma jeszcze kolumn `geom`)
-- [ ] Import GTFS: pobranie archiwum, parsowanie, załadowanie do bazy, budowa geometrii — **nie zrobione**, `ingest/gtfs_import.py` wciąż placeholder; dodany tylko `backend/scripts/seed_data.py` z ręcznie wpisanymi danymi testowymi (kilka przystanków/linii dla Wrocławia)
-- [ ] Diagram ERD do raportu — **nie zrobione**
+- [x] Migracje Alembic: tabele GTFS z geometrią PostGIS (`stops`, `routes`, `trips`, `stop_times`, `shapes`, `calendar*`) — pełny schemat (`geoalchemy2`), zweryfikowany na realnych danych Wrocławia (2429 przystanków, 133 linie, 41 790 kursów, 1 131 610 wierszy `stop_times`)
+- [x] Migracje: `vehicle_positions`, `vehicle_state`, `users`, `favourite_*`, `devices` — schemat gotowy (puste do Sprintu 3/5, zgodnie z planem)
+- [x] Indeksy przestrzenne (GIST) na `stops.geom`, `shapes.geom`
+- [x] Import GTFS: pobranie archiwum, parsowanie, załadowanie do bazy, budowa geometrii — `ingest/gtfs_import.py`, `stop_times` ładowane przez `psycopg COPY` (wydajność przy 1,1 mln wierszy); **źródło**: oficjalny URL wroclaw.pl blokuje automatyczne pobieranie (Cloudflare bot-fight, potwierdzone), więc import czyta lokalny plik `backend/data/wroclaw.gtfs.zip` (zwierciadło Mobility Database, do ręcznego odświeżenia co jakiś czas — plik gitignored)
+- [x] Diagram ERD do raportu — `docs/erd.md` (Mermaid)
 
 **Wspólnie**
-- [ ] [I+A] Uzgodnienie kontraktu API (schematy JSON) – na tej podstawie Igor robi dane testowe — powstały schematy Pydantic (`StopRead`, `LineRead`, `RouteRead`, `VehicleRead`) jako efekt implementacji, ale **nie jako uzgodniony wcześniej, spisany kontrakt**
-- [ ] [I+A] Raport — do zweryfikowania poza repo
+- [x] [I+A] Uzgodnienie kontraktu API (schematy JSON) – na tej podstawie Igor robi dane testowe — schematy Pydantic (`StopRead`, `RouteRead`, `DepartureRead`, `VehicleStateRead`) i realne dane z importu zastępują potrzebę osobnych danych testowych
+- [x] [I+A] Raport — `docs/MSI_Sprint_2_report.pdf`
 
 **Gotowe gdy:** rozkład GTFS jest w bazie, aplikacja ma wszystkie główne ekrany z nawigacją na danych testowych.
-**Stan:** częściowo — baza ma uproszczony model (nie GTFS), brak ekranu odjazdów i wyszukiwania; nawigacja i przebieg linii działają na prawdziwych (nie testowych) danych z backendu.
+**Stan:** zrobione, na realnych (nie testowych) danych — lepiej niż wymagało minimum sprintu. Jedno zastrzeżenie: zaimportowany snapshot GTFS (zwierciadło) ma `calendar` ważny do 2025-12-12 — `/stops/{id}/departures` poprawnie zwraca pustą listę, dopóki nie wgra się świeższego archiwum.
 
 ---
 
@@ -78,16 +78,16 @@ Oznaczenia: **[I]** Igor, **[A]** Andrzej, **[I+A]** wspólnie.
 - [ ] Adapter źródła pozycji pojazdów (`VehiclePositionSource`) + implementacja dla MPK
 - [ ] Polling pozycji co ~10 s → zapis do `vehicle_positions`, aktualizacja `vehicle_state`
 - [ ] Nagrywanie danych i tryb replay (`SOURCE=replay`)
-- [ ] Endpointy: `/vehicles`, `/stops`, `/stops/nearby`, `/lines`, `/lines/{id}/route` — **zrobione wcześniej w Sprincie 2**: `/vehicles` (z filtrem `line_id`), `/stops`, `/stops/{id}/lines`, `/lines`, `/lines/{id}/route`; **brakuje** `/stops/nearby` i filtra `type` (tramwaj/autobus — nie ma jeszcze pola typu pojazdu/linii w modelu)
-- [ ] `/stops/{id}/departures` – na razie tylko rozkład, bez opóźnień — nie zrobione, zależy od tabel `stop_times`/`calendar` ze Sprintu 2
+- [ ] Endpointy: `/vehicles`, `/stops`, `/stops/nearby`, `/lines`, `/lines/{id}/route` — **zrobione wcześniej w Sprincie 2**: `/vehicles` (z filtrem `line`, dane z `vehicle_state`), `/stops` (z `?q=`), `/routes` (z `?q=`, nazwa ujednolicona z GTFS — nie `/lines`), `/routes/{id}/route`; **brakuje** `/stops/nearby` (zapytanie przestrzenne po GIST — model już to wspiera, zapytanie jeszcze nie napisane)
+- [x] `/stops/{id}/departures` – na razie tylko rozkład, bez opóźnień — **zrobione wcześniej w Sprincie 2**, bo `stop_times`/`calendar` już są; join po aktywnym dziś `service_id`, bez uwzględnienia `calendar_dates` (ten feed ma pusty plik, więc na razie no-op)
 - [ ] Dokumentacja OpenAPI (automatyczna z FastAPI), przykłady odpowiedzi — Swagger pod `/docs` dostępny automatycznie (nic do zrobienia), ale **brak** dopisanych przykładów odpowiedzi
-- [x] Testy endpointów (pytest + testowa baza) — **zrobione wcześniej w Sprincie 2** dla `/stops`, `/lines`, `/vehicles` (SQLite in-memory w `conftest.py`); brak jeszcze dedykowanych testów dla `/routes`
-- [ ] CORS, obsługa błędów, logowanie — `HTTPException` 404 jest, ale **brak** middleware CORS i ustrukturyzowanego logowania
+- [x] Testy endpointów (pytest + testowa baza) — **zrobione wcześniej w Sprincie 2** dla `/stops`, `/routes` (w tym kształt trasy), `/vehicles`, `/stops/{id}/departures`; testy przeszły z SQLite in-memory na realny Postgres (serwis `db` w CI) — SQLite nie ma funkcji PostGIS (`ST_X`/`ST_Y`), których endpointy teraz używają
+- [ ] CORS, obsługa błędów, logowanie — **zrobione częściowo wcześniej w Sprincie 2**: middleware CORS jest (wymagane, żeby apka web w ogóle działała), `HTTPException` 404 jest; **brak** ustrukturyzowanego logowania
 
 **Aplikacja [I]**
 - [x] Klient HTTP (`dio`/`http`), konfiguracja adresu API — **zrobione wcześniej w Sprincie 2**: `ApiClient` na `package:http` + `AppConfig.apiBaseUrl`
-- [ ] Mapa na żywych danych z `/vehicles`, odświeżanie co 10 s — mapa nadal statyczna (sama warstwa OSM), brak markerów pojazdów i pollingu
-- [ ] Wyszukiwanie przez `/stops?q=` i `/lines?q=` — jest tylko pełne listowanie, backend nie przyjmuje jeszcze parametru `q`
+- [ ] Mapa na żywych danych z `/vehicles`, odświeżanie co 10 s — mapa ma już filtry tramwaj/autobus i znacznik użytkownika (Sprint 2), ale brak markerów pojazdów i pollingu (`vehicle_state` jest puste do czasu pollingu)
+- [x] Wyszukiwanie przez `/stops?q=` i `/lines?q=` — **zrobione wcześniej w Sprincie 2** (endpoint ujednolicony jako `/routes?q=`, nie `/lines?q=`), z debounce w UI
 - [ ] Obsługa braku sieci i błędów (NFR6) — częściowo: ekrany pokazują błąd przez `AsyncValue.when`/`FutureProvider`, ale brak retry i trybu offline (ostatnie znane dane)
 
 **Wspólnie**
