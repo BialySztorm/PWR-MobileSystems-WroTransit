@@ -16,7 +16,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+psycopg://db/wrotransit
+      DATABASE_URL: postgresql+psycopg://wrotransit:wrotransit@db:5432/wrotransit
     ports:
       - "8000:8000"
     depends_on:
@@ -29,7 +29,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+psycopg://db/wrotransit
+      DATABASE_URL: postgresql+psycopg://wrotransit:wrotransit@db:5432/wrotransit
     depends_on:
       - db
 
