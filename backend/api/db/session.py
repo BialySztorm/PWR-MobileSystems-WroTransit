@@ -8,7 +8,7 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql+psycopg://wrotransit:wrotransit@localhost:5432/wrotransit"
 )
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=1800)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
