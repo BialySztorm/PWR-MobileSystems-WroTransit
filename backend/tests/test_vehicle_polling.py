@@ -22,10 +22,13 @@ def test_insert_vehicle_position_appends_row(db_session: Session) -> None:
     insert_vehicle_position(db_session, _reading())
     db_session.commit()
 
-    rows = db_session.execute(text("SELECT vehicle_id, line FROM vehicle_positions")).all()
+    rows = db_session.execute(
+        text("SELECT vehicle_id, line, vehicle_type FROM vehicle_positions")
+    ).all()
     assert len(rows) == 1
     assert rows[0].vehicle_id == "A-1"
     assert rows[0].line == "4"
+    assert rows[0].vehicle_type == "tram"
 
 
 def test_upsert_vehicle_state_replaces_existing_row(db_session: Session) -> None:
@@ -36,8 +39,9 @@ def test_upsert_vehicle_state_replaces_existing_row(db_session: Session) -> None
     db_session.commit()
 
     rows = db_session.execute(
-        text("SELECT ST_Y(geom) AS lat, ST_X(geom) AS lon FROM vehicle_state")
+        text("SELECT ST_Y(geom) AS lat, ST_X(geom) AS lon, vehicle_type FROM vehicle_state")
     ).all()
     assert len(rows) == 1
     assert rows[0].lat == 51.20
     assert rows[0].lon == 17.10
+    assert rows[0].vehicle_type == "tram"

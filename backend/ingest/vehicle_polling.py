@@ -43,6 +43,7 @@ def insert_vehicle_position(session: Session, reading: VehicleReading) -> None:
         insert(VehiclePosition).values(
             vehicle_id=reading.vehicle_id,
             line=reading.line,
+            vehicle_type=reading.vehicle_type,
             geom=f"SRID=4326;POINT({reading.lon} {reading.lat})",
             recorded_at=reading.recorded_at,
         )
@@ -53,6 +54,7 @@ def upsert_vehicle_state(session: Session, reading: VehicleReading) -> None:
     stmt = pg_insert(VehicleState).values(
         vehicle_id=reading.vehicle_id,
         line=reading.line,
+        vehicle_type=reading.vehicle_type,
         geom=f"SRID=4326;POINT({reading.lon} {reading.lat})",
         recorded_at=reading.recorded_at,
     )
@@ -60,6 +62,7 @@ def upsert_vehicle_state(session: Session, reading: VehicleReading) -> None:
         index_elements=[VehicleState.vehicle_id],
         set_={
             "line": stmt.excluded.line,
+            "vehicle_type": stmt.excluded.vehicle_type,
             "geom": stmt.excluded.geom,
             "recorded_at": stmt.excluded.recorded_at,
         },

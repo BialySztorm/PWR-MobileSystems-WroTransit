@@ -9,6 +9,7 @@ class VehicleStateRead(BaseModel):
             "example": {
                 "vehicle_id": "14482003",
                 "line": "4",
+                "vehicle_type": "tram",
                 "lat": 51.09238,
                 "lon": 17.01899,
                 "recorded_at": "2026-11-14T08:30:00Z",
@@ -19,6 +20,8 @@ class VehicleStateRead(BaseModel):
 
     vehicle_id: str
     line: str | None
+    vehicle_type: str | None
+    """"tram" or "bus"."""
     lat: float | None
     lon: float | None
     recorded_at: datetime | None

@@ -15,6 +15,9 @@ class VehiclePosition(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     vehicle_id: Mapped[str] = mapped_column(String(32))
     line: Mapped[str] = mapped_column(String(16))
+    vehicle_type: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    """"tram" or "bus", as reported by the source. Nullable: unknown for old rows / sources
+    that don't report it."""
     geom: Mapped[str] = mapped_column(Geometry(geometry_type="POINT", srid=4326))
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     trip_id: Mapped[str | None] = mapped_column(
@@ -30,6 +33,8 @@ class VehicleState(Base):
 
     vehicle_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     line: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    vehicle_type: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    """"tram" or "bus", as reported by the source."""
     geom: Mapped[str | None] = mapped_column(
         Geometry(geometry_type="POINT", srid=4326), nullable=True
     )
