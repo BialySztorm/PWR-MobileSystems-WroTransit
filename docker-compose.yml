@@ -25,11 +25,12 @@ services:
   ingest:
     build:
       context: ./backend
-    command: ["python", "-c", "print('Ingest service skeleton')"]
+    command: ["python", "-m", "ingest.vehicle_polling"]
     env_file:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg://wrotransit:wrotransit@db:5432/wrotransit
+      SOURCE: mpk
     depends_on:
       - db
 
