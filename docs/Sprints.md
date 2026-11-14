@@ -89,6 +89,7 @@ Oznaczenia: **[I]** Igor, **[A]** Andrzej, **[I+A]** wspólnie.
 - [ ] Mapa na żywych danych z `/vehicles`, odświeżanie co 10 s — mapa ma już filtry tramwaj/autobus i znacznik użytkownika (Sprint 2), ale brak markerów pojazdów i pollingu (`vehicle_state` jest puste do czasu pollingu)
 - [x] Wyszukiwanie przez `/stops?q=` i `/lines?q=` — **zrobione wcześniej w Sprincie 2** (endpoint ujednolicony jako `/routes?q=`, nie `/lines?q=`), z debounce w UI
 - [ ] Obsługa braku sieci i błędów (NFR6) — częściowo: ekrany pokazują błąd przez `AsyncValue.when`/`FutureProvider`, ale brak retry i trybu offline (ostatnie znane dane)
+- [ ] CI (`flutter analyze`) czerwone — 11× `deprecated_member_use` na `package:flutter/material.dart` (zastąpiony przez `package:material_ui/material_ui.dart` od Fluttera v3.47.0-0.0.pre) w praktycznie każdym ekranie; `.github/workflows/ci.yml` używa `channel: stable` bez przypięcia wersji, więc świeży SDK złapał to na starym kodzie. Do zrobienia: albo zmigrować importy na `material_ui`, albo przypiąć konkretną wersję Fluttera w CI (`flutter-version:` zamiast `channel: stable`) do czasu migracji.
 
 **Wspólnie**
 - [ ] [I+A] Raport
