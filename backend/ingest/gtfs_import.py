@@ -6,6 +6,7 @@ Run: python -m ingest.gtfs_import [path/to/feed.zip]
 """
 import csv
 import io
+import logging
 import sys
 import zipfile
 from itertools import groupby
@@ -16,6 +17,9 @@ from sqlalchemy import insert, text
 
 from api.db.session import engine
 from api.models import Calendar, CalendarDate, Route, Shape, Stop, Trip
+from ingest.logging_config import configure_logging
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_GTFS_PATH = Path(__file__).resolve().parent.parent / "data" / "wroclaw.gtfs.zip"
 
@@ -180,23 +184,24 @@ def run_gtfs_import(path: Path = DEFAULT_GTFS_PATH) -> None:
         conn.execute(SCHEDULE_TABLES_TRUNCATE_SQL)
 
         stops = _import_stops(archive, conn)
-        print(f"stops: {stops}")
+        logger.info("stops: %d", stops)
         routes = _import_routes(archive, conn)
-        print(f"routes: {routes}")
+        logger.info("routes: %d", routes)
         shapes = _import_shapes(archive, conn)
-        print(f"shapes: {shapes}")
+        logger.info("shapes: %d", shapes)
         calendar = _import_calendar(archive, conn)
-        print(f"calendar: {calendar}")
+        logger.info("calendar: %d", calendar)
         calendar_dates = _import_calendar_dates(archive, conn)
-        print(f"calendar_dates: {calendar_dates}")
+        logger.info("calendar_dates: %d", calendar_dates)
         trips = _import_trips(archive, conn)
-        print(f"trips: {trips}")
+        logger.info("trips: %d", trips)
 
         raw_conn = conn.connection.dbapi_connection
         stop_times = _import_stop_times(archive, raw_conn)
-        print(f"stop_times: {stop_times}")
+        logger.info("stop_times: %d", stop_times)
 
 
 if __name__ == "__main__":
+    configure_logging()
     gtfs_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_GTFS_PATH
     run_gtfs_import(gtfs_path)
