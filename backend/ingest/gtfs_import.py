@@ -1,6 +1,8 @@
 """Import a local GTFS static feed (stops/routes/trips/stop_times/shapes/calendar*) into the
-schedule tables. Re-run after downloading a fresh archive - the schedule tables are rebuilt
-from scratch on every import.
+schedule tables. Re-run after downloading a fresh archive. trips/stop_times/shapes/calendar*
+are fully rebuilt every import; stops/routes are upserted in place (not deleted), since
+vehicle_positions/vehicle_state/favourite_stops/favourite_lines reference them and must
+survive a re-import unaffected.
 
 Run: python -m ingest.gtfs_import [path/to/feed.zip]
 """
@@ -14,6 +16,7 @@ from pathlib import Path
 
 from shapely.geometry import LineString
 from sqlalchemy import insert, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from api.db.session import engine
 from api.models import Calendar, CalendarDate, Route, Shape, Stop, Trip
@@ -23,10 +26,25 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_GTFS_PATH = Path(__file__).resolve().parent.parent / "data" / "wroclaw.gtfs.zip"
 
-SCHEDULE_TABLES_TRUNCATE_SQL = text(
-    "TRUNCATE TABLE stop_times, trips, calendar_dates, calendar, shapes, routes, stops "
-    "RESTART IDENTITY CASCADE"
-)
+# stops/routes are upserted (never deleted) because vehicle_positions, vehicle_state and
+# favourite_stops/favourite_lines reference them by stop_id/route_id - deleting and
+# re-inserting those rows would either violate their FK constraints or (with CASCADE)
+# silently wipe live vehicle data and user favourites on every re-import. The remaining
+# schedule tables (trips, stop_times, shapes, calendar*) are fully rebuilt every import,
+# since nothing outside the schedule depends on their specific rows - except trips, which
+# vehicle_positions/vehicle_state also reference, so those FKs are cleared first and the
+# table is cleared with DELETE (which respects that) rather than TRUNCATE (which, for a
+# table with incoming FKs, refuses unless every referencing table is truncated too - see
+# https://www.postgresql.org/docs/current/sql-truncate.html).
+_RESET_SCHEDULE_TABLES_SQL = [
+    text("TRUNCATE TABLE stop_times RESTART IDENTITY"),
+    text("UPDATE vehicle_positions SET trip_id = NULL"),
+    text("UPDATE vehicle_state SET trip_id = NULL"),
+    text("DELETE FROM calendar_dates"),
+    text("DELETE FROM trips"),
+    text("DELETE FROM calendar"),
+    text("DELETE FROM shapes"),
+]
 
 
 def _read_rows(archive: zipfile.ZipFile, filename: str) -> list[dict]:
@@ -41,9 +59,10 @@ def _time_to_seconds(value: str) -> int:
 
 
 def _import_stops(archive: zipfile.ZipFile, conn) -> int:
+    """Upserted, never deleted - vehicle_positions/vehicle_state/favourite_stops
+    reference stops by stop_id and must survive a re-import unaffected."""
     rows = _read_rows(archive, "stops.txt")
-    conn.execute(
-        insert(Stop),
+    stmt = pg_insert(Stop).values(
         [
             {
                 "stop_id": r["stop_id"],
@@ -52,15 +71,25 @@ def _import_stops(archive: zipfile.ZipFile, conn) -> int:
                 "geom": f"SRID=4326;POINT({r['stop_lon']} {r['stop_lat']})",
             }
             for r in rows
-        ],
+        ]
     )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Stop.stop_id],
+        set_={
+            "stop_code": stmt.excluded.stop_code,
+            "name": stmt.excluded.name,
+            "geom": stmt.excluded.geom,
+        },
+    )
+    conn.execute(stmt)
     return len(rows)
 
 
 def _import_routes(archive: zipfile.ZipFile, conn) -> int:
+    """Upserted, never deleted - vehicle_state/favourite_lines reference routes by
+    route_id and must survive a re-import unaffected."""
     rows = _read_rows(archive, "routes.txt")
-    conn.execute(
-        insert(Route),
+    stmt = pg_insert(Route).values(
         [
             {
                 "route_id": r["route_id"],
@@ -69,8 +98,17 @@ def _import_routes(archive: zipfile.ZipFile, conn) -> int:
                 "type": int(r["route_type"]),
             }
             for r in rows
-        ],
+        ]
     )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Route.route_id],
+        set_={
+            "short_name": stmt.excluded.short_name,
+            "long_name": stmt.excluded.long_name,
+            "type": stmt.excluded.type,
+        },
+    )
+    conn.execute(stmt)
     return len(rows)
 
 
@@ -181,7 +219,8 @@ def run_gtfs_import(path: Path = DEFAULT_GTFS_PATH) -> None:
         )
 
     with zipfile.ZipFile(path) as archive, engine.begin() as conn:
-        conn.execute(SCHEDULE_TABLES_TRUNCATE_SQL)
+        for stmt in _RESET_SCHEDULE_TABLES_SQL:
+            conn.execute(stmt)
 
         stops = _import_stops(archive, conn)
         logger.info("stops: %d", stops)
