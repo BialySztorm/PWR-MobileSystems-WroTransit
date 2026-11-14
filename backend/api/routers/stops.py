@@ -111,22 +111,44 @@ def get_stop_departures(
     stop_id: str, limit: int = Query(default=10, le=50), db: Session = Depends(get_db)
 ) -> list[dict]:
     now = datetime.now()
-    weekday_column = WEEKDAY_COLUMNS[now.weekday()]
+    today_column = WEEKDAY_COLUMNS[now.weekday()]
+    yesterday_column = WEEKDAY_COLUMNS[(now.weekday() - 1) % 7]
     now_s = now.hour * 3600 + now.minute * 60 + now.second
 
+    # GTFS allows departure_time_s > 86400 for a trip that keeps running past midnight
+    # (night lines): that time is still relative to *yesterday's* service day. So "today's
+    # upcoming departures" is two sets unioned together: today's calendar with a plain
+    # time filter, and yesterday's calendar with the time shifted by +86400.
     stmt = text(
         f"""
-        SELECT r.short_name AS route_short_name, r.type AS route_type,
-               t.headsign, t.direction_id, st.departure_time_s
-        FROM stop_times st
-        JOIN trips t ON t.trip_id = st.trip_id
-        JOIN routes r ON r.route_id = t.route_id
-        JOIN calendar c ON c.service_id = t.service_id
-        WHERE st.stop_id = :stop_id
-          AND st.departure_time_s >= :now_s
-          AND c.{weekday_column} IS TRUE
-          AND CURRENT_DATE BETWEEN c.start_date AND c.end_date
-        ORDER BY st.departure_time_s
+        SELECT route_short_name, route_type, headsign, direction_id, departure_time_s
+        FROM (
+            SELECT r.short_name AS route_short_name, r.type AS route_type,
+                   t.headsign, t.direction_id, st.departure_time_s,
+                   st.departure_time_s - :now_s AS seconds_until
+            FROM stop_times st
+            JOIN trips t ON t.trip_id = st.trip_id
+            JOIN routes r ON r.route_id = t.route_id
+            JOIN calendar c ON c.service_id = t.service_id
+            WHERE st.stop_id = :stop_id
+              AND st.departure_time_s >= :now_s
+              AND c.{today_column} IS TRUE
+              AND CURRENT_DATE BETWEEN c.start_date AND c.end_date
+
+            UNION ALL
+
+            SELECT r.short_name, r.type, t.headsign, t.direction_id, st.departure_time_s,
+                   st.departure_time_s - 86400 - :now_s AS seconds_until
+            FROM stop_times st
+            JOIN trips t ON t.trip_id = st.trip_id
+            JOIN routes r ON r.route_id = t.route_id
+            JOIN calendar c ON c.service_id = t.service_id
+            WHERE st.stop_id = :stop_id
+              AND st.departure_time_s >= :now_s + 86400
+              AND c.{yesterday_column} IS TRUE
+              AND CURRENT_DATE - 1 BETWEEN c.start_date AND c.end_date
+        ) AS candidates
+        ORDER BY seconds_until
         LIMIT :limit
         """
     )
