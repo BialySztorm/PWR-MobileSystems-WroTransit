@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from geoalchemy2 import Geometry
+from geoalchemy2.elements import WKBElement
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,7 +19,7 @@ class VehiclePosition(Base):
     vehicle_type: Mapped[str | None] = mapped_column(String(8), nullable=True)
     """"tram" or "bus", as reported by the source. Nullable: unknown for old rows / sources
     that don't report it."""
-    geom: Mapped[str] = mapped_column(Geometry(geometry_type="POINT", srid=4326))
+    geom: Mapped[WKBElement] = mapped_column(Geometry(geometry_type="POINT", srid=4326))
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     trip_id: Mapped[str | None] = mapped_column(
         ForeignKey("trips.trip_id"), nullable=True
@@ -35,7 +36,7 @@ class VehicleState(Base):
     line: Mapped[str | None] = mapped_column(String(16), nullable=True)
     vehicle_type: Mapped[str | None] = mapped_column(String(8), nullable=True)
     """"tram" or "bus", as reported by the source."""
-    geom: Mapped[str | None] = mapped_column(
+    geom: Mapped[WKBElement | None] = mapped_column(
         Geometry(geometry_type="POINT", srid=4326), nullable=True
     )
     recorded_at: Mapped[datetime | None] = mapped_column(
