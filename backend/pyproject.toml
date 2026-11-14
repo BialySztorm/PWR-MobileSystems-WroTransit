@@ -17,6 +17,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3.3",
+  # starlette.testclient (used by our `client` test fixture) warns and falls back to
+  # `httpx` without this - it's unrelated to the real httpx client MpkSource uses.
+  "httpx2>=2.0.0",
 ]
 
 [tool.pytest.ini_options]
