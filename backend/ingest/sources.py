@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import urlencode
 
 import httpx
 
@@ -87,8 +88,12 @@ class MpkSource:
 
     def _post(self, body: list[tuple[str, str]]) -> list[dict] | None:
         try:
+            # httpx's `data=` only accepts a Mapping, so a repeated-key body like
+            # busList[tram][]=4&busList[tram][]=5 has to be encoded by hand.
+            encoded_body = urlencode(body)
+            headers = {"Content-Type": "application/x-www-form-urlencoded"}
             with httpx.Client(timeout=self._timeout_s) as client:
-                response = client.post(MPK_URL, data=body)
+                response = client.post(MPK_URL, content=encoded_body, headers=headers)
             response.raise_for_status()
             return response.json()
         except httpx.ConnectError as exc:

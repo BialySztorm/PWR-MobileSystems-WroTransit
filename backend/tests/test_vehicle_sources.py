@@ -1,3 +1,5 @@
+from urllib.parse import parse_qsl, urlencode
+
 import httpx
 import pytest
 
@@ -18,8 +20,8 @@ class _FakeResponse:
 def test_mpk_source_sends_typed_body_first(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[tuple[str, str]]] = []
 
-    def fake_post(self: httpx.Client, url: str, data=None) -> _FakeResponse:
-        calls.append(list(data))
+    def fake_post(self: httpx.Client, url: str, content=None, headers=None) -> _FakeResponse:
+        calls.append(parse_qsl(content))
         return _FakeResponse(
             [{"name": "4", "type": "tram", "x": 51.11, "y": 17.03, "k": 123}]
         )
@@ -40,8 +42,8 @@ def test_mpk_source_falls_back_to_untyped_body_on_empty_response(
 ) -> None:
     calls: list[list[tuple[str, str]]] = []
 
-    def fake_post(self: httpx.Client, url: str, data=None) -> _FakeResponse:
-        calls.append(list(data))
+    def fake_post(self: httpx.Client, url: str, content=None, headers=None) -> _FakeResponse:
+        calls.append(parse_qsl(content))
         if len(calls) == 1:
             return _FakeResponse([])
         return _FakeResponse(
@@ -63,7 +65,7 @@ def test_mpk_source_falls_back_to_untyped_body_on_empty_response(
 def test_mpk_source_maps_fields_with_xy_swap_and_records(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    def fake_post(self: httpx.Client, url: str, data=None) -> _FakeResponse:
+    def fake_post(self: httpx.Client, url: str, content=None, headers=None) -> _FakeResponse:
         return _FakeResponse(
             [{"name": "31", "type": "tram", "x": 51.09238, "y": 17.01899, "k": 14482003}]
         )
@@ -89,7 +91,7 @@ def test_mpk_source_maps_fields_with_xy_swap_and_records(
 def test_mpk_source_returns_empty_on_request_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_post(self: httpx.Client, url: str, data=None):
+    def fake_post(self: httpx.Client, url: str, content=None, headers=None):
         raise httpx.ConnectError("connection refused")
 
     monkeypatch.setattr(httpx.Client, "post", fake_post)
@@ -102,7 +104,7 @@ def test_mpk_source_returns_empty_on_request_error(
 def test_mpk_source_reraises_tls_verification_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_post(self: httpx.Client, url: str, data=None):
+    def fake_post(self: httpx.Client, url: str, content=None, headers=None):
         raise httpx.ConnectError("certificate verify failed: self signed certificate")
 
     monkeypatch.setattr(httpx.Client, "post", fake_post)
@@ -111,3 +113,32 @@ def test_mpk_source_reraises_tls_verification_failure(
 
     with pytest.raises(httpx.ConnectError):
         source.fetch()
+
+
+def test_repeated_key_body_round_trips_through_real_httpx() -> None:
+    """Regression test: httpx.Client.post(data=<list of tuples>) silently mis-encodes
+    repeated-key form bodies (unlike `requests` - raises a TypeError deep in h11 when
+    actually sent). MpkSource avoids `data=` entirely and urlencodes by hand into
+    `content=`; this exercises that exact path against a real (mocked-transport) httpx
+    client, with no monkeypatching of httpx itself."""
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.content
+        captured["content_type"] = request.headers.get("content-type")
+        return httpx.Response(200, json=[])
+
+    body = [("busList[tram][]", "4"), ("busList[bus][]", "144")]
+    encoded_body = urlencode(body)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        client.post(
+            "https://mpk.wroc.pl/bus_position",
+            content=encoded_body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+    parsed = parse_qsl(captured["body"].decode())
+    assert ("busList[tram][]", "4") in parsed
+    assert ("busList[bus][]", "144") in parsed
+    assert captured["content_type"] == "application/x-www-form-urlencoded"
