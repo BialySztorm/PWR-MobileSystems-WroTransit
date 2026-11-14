@@ -4,7 +4,17 @@ from api.schemas.stop import StopRead
 
 
 class RouteRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "example": {
+                "route_id": "4",
+                "short_name": "4",
+                "long_name": None,
+                "type": 0,
+            }
+        },
+    )
 
     route_id: str
     short_name: str

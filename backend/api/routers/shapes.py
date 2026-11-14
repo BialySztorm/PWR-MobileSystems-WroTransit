@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from api.bbox import parse_bbox
 from api.db.session import get_db
 from api.schemas.shape import ShapeRead
 
@@ -15,7 +16,7 @@ def list_shapes(
     bbox: str = Query(..., description="minLon,minLat,maxLon,maxLat (map viewport)"),
     db: Session = Depends(get_db),
 ) -> list[dict]:
-    min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox.split(","))
+    min_lon, min_lat, max_lon, max_lat = parse_bbox(bbox)
     stmt = text(
         """
         SELECT DISTINCT ON (s.shape_id) s.shape_id, ST_AsGeoJSON(s.geom) AS geojson, r.type AS route_type
@@ -23,6 +24,7 @@ def list_shapes(
         LEFT JOIN trips t ON t.shape_id = s.shape_id
         LEFT JOIN routes r ON r.route_id = t.route_id
         WHERE ST_Intersects(s.geom, ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326))
+        ORDER BY s.shape_id, r.route_id
         LIMIT 300
         """
     )

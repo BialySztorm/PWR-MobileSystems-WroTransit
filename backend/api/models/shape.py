@@ -1,4 +1,5 @@
 from geoalchemy2 import Geometry
+from geoalchemy2.elements import WKBElement
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -9,4 +10,4 @@ class Shape(Base):
     __tablename__ = "shapes"
 
     shape_id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    geom: Mapped[str] = mapped_column(Geometry(geometry_type="LINESTRING", srid=4326))
+    geom: Mapped[WKBElement] = mapped_column(Geometry(geometry_type="LINESTRING", srid=4326))

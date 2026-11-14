@@ -11,12 +11,15 @@ dependencies = [
   "psycopg[binary]>=3.2.3",
   "geoalchemy2>=0.15.2",
   "shapely>=2.0.6",
+  "httpx>=0.27.2",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3.3",
-  "httpx>=0.27.2",
+  # starlette.testclient (used by our `client` test fixture) warns and falls back to
+  # `httpx` without this - it's unrelated to the real httpx client MpkSource uses.
+  "httpx2>=2.0.0",
 ]
 
 [tool.pytest.ini_options]

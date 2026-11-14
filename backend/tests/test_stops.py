@@ -44,6 +44,41 @@ def test_get_stop_not_found_returns_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+def test_list_stops_nearby_orders_by_distance_within_radius(
+    client: TestClient, db_session: Session
+) -> None:
+    db_session.add_all(
+        [
+            _make_stop("1", "Close", 51.1100, 17.0300),
+            _make_stop("2", "Far", 51.2000, 17.2000),
+        ]
+    )
+    db_session.commit()
+
+    response = client.get("/stops/nearby?lat=51.1101&lon=17.0301&radius=5000")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [s["stop_id"] for s in body] == ["1"]
+    assert body[0]["distance_m"] < 100
+
+
+def test_list_stops_with_malformed_bbox_returns_422(client: TestClient) -> None:
+    response = client.get("/stops?bbox=1,2,3")
+    assert response.status_code == 422
+
+    response = client.get("/stops?bbox=abc,def,ghi,jkl")
+    assert response.status_code == 422
+
+
+def test_list_stops_nearby_rejects_non_positive_radius_and_limit(client: TestClient) -> None:
+    response = client.get("/stops/nearby?lat=51&lon=17&radius=0")
+    assert response.status_code == 422
+
+    response = client.get("/stops/nearby?lat=51&lon=17&limit=-1")
+    assert response.status_code == 422
+
+
 def test_list_stops_with_bbox_returns_served_modes(
     client: TestClient, db_session: Session
 ) -> None:

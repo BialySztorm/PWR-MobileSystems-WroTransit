@@ -26,6 +26,9 @@ backend/uv.lock
 *.gtfs.zip
 *.gtfs
 
+# Recorded vehicle position sessions (replay data)
+backend/data/recordings/
+
 # OS artifacts
 .DS_Store
 

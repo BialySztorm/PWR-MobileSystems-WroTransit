@@ -1,0 +1,237 @@
+"""Vehicle position sources.
+
+Wrocław does not publish GTFS-Realtime; the only live feed is MPK's own (undocumented,
+unstable) map endpoint. Access to it is isolated behind `VehiclePositionSource` so it can
+be swapped or mocked, and every raw response is recorded to disk so a `ReplaySource` can
+reproduce a session later for tests/demo without hitting the network.
+"""
+import json
+import logging
+import ssl
+import time
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Protocol
+from urllib.parse import urlencode
+
+import httpx
+
+from ingest.config import Config
+
+logger = logging.getLogger(__name__)
+
+MPK_URL = "https://mpk.wroc.pl/bus_position"
+
+# A recorded session can span an overnight gap (polling stopped, resumed next morning);
+# without a cap, replaying that gap verbatim would block the only thread in the ingest
+# loop for hours, looking exactly like a hung container.
+MAX_REPLAY_GAP_S = 60.0
+
+
+def _is_tls_verification_failure(exc: BaseException) -> bool:
+    """Walks the exception chain for the actual ssl error httpx wraps, falling back to a
+    message match only if that's not available (e.g. a different TLS backend)."""
+    cause: BaseException | None = exc
+    while cause is not None:
+        if isinstance(cause, ssl.SSLCertVerificationError):
+            return True
+        cause = cause.__cause__ or cause.__context__
+    return "certificate verify failed" in str(exc).lower()
+
+
+@dataclass(frozen=True)
+class VehicleReading:
+    vehicle_id: str
+    line: str
+    vehicle_type: str
+    """"tram" or "bus"."""
+    lat: float
+    lon: float
+    recorded_at: datetime
+
+
+class VehiclePositionSource(Protocol):
+    def fetch(self) -> list[VehicleReading]: ...
+
+
+def _parse_raw(raw: list[dict], recorded_at: datetime) -> list[VehicleReading]:
+    readings = []
+    for entry in raw:
+        try:
+            readings.append(
+                VehicleReading(
+                    vehicle_id=str(entry["k"]),
+                    line=str(entry["name"]),
+                    vehicle_type=entry["type"],
+                    lat=float(entry["x"]),
+                    lon=float(entry["y"]),
+                    recorded_at=recorded_at,
+                )
+            )
+        except (KeyError, TypeError, ValueError):
+            logger.warning("Skipping malformed vehicle position entry: %r", entry)
+    return readings
+
+
+class Recorder:
+    """Appends every raw MPK response to a dated JSONL file for later replay, and prunes
+    files older than `retention_days` (docs/Specifications.md: ~7 days is enough for
+    replay/analysis - keeping them all forever would grow unbounded)."""
+
+    def __init__(self, recordings_dir: Path, retention_days: int = 7) -> None:
+        self._recordings_dir = recordings_dir
+        self._retention_days = retention_days
+
+    def record(self, raw: list[dict], timestamp: datetime) -> None:
+        self._recordings_dir.mkdir(parents=True, exist_ok=True)
+        path = self._recordings_dir / f"vehicle_positions_{timestamp:%Y%m%d}.jsonl"
+        line = json.dumps({"recorded_at": timestamp.isoformat(), "raw": raw})
+        with path.open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
+        self._prune_old_recordings(timestamp)
+
+    def _prune_old_recordings(self, now: datetime) -> None:
+        cutoff = now - timedelta(days=self._retention_days)
+        for old_path in self._recordings_dir.glob("vehicle_positions_*.jsonl"):
+            date_part = old_path.stem.removeprefix("vehicle_positions_")
+            try:
+                file_date = datetime.strptime(date_part, "%Y%m%d").replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+            if file_date < cutoff:
+                old_path.unlink(missing_ok=True)
+
+
+class MpkSource:
+    """Polls MPK Wrocław's bus_position endpoint (see docs/Specifications.md section 2)."""
+
+    def __init__(
+        self,
+        tram_lines: list[str],
+        bus_lines: list[str],
+        timeout_s: float = 5.0,
+        recorder: Recorder | None = None,
+    ) -> None:
+        self._tram_lines = tram_lines
+        self._bus_lines = bus_lines
+        self._timeout_s = timeout_s
+        self._recorder = recorder
+
+    def update_lines(self, tram_lines: list[str], bus_lines: list[str]) -> None:
+        """Lets the caller refresh the polled line lists periodically (e.g. after a GTFS
+        re-import adds/renumbers lines) without restarting the process."""
+        self._tram_lines = tram_lines
+        self._bus_lines = bus_lines
+
+    def _post(self, body: list[tuple[str, str]]) -> list[dict] | None:
+        try:
+            # httpx's `data=` only accepts a Mapping, so a repeated-key body like
+            # busList[tram][]=4&busList[tram][]=5 has to be encoded by hand.
+            encoded_body = urlencode(body)
+            headers = {"Content-Type": "application/x-www-form-urlencoded"}
+            with httpx.Client(timeout=self._timeout_s) as client:
+                response = client.post(MPK_URL, content=encoded_body, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            if not isinstance(data, list):
+                # A "successful" response that isn't the expected array (e.g. an error
+                # object) must not be treated as "zero vehicles" nor recorded as if it
+                # were real data - force the typed/untyped fallback instead.
+                logger.warning("MPK response was not a JSON array: %r", type(data))
+                return None
+            return data
+        except httpx.ConnectError as exc:
+            if _is_tls_verification_failure(exc):
+                raise
+            logger.warning("MPK request failed: %s", exc)
+            return None
+        except httpx.HTTPError as exc:
+            logger.warning("MPK request failed: %s", exc)
+            return None
+        except ValueError:
+            logger.warning("MPK response was not valid JSON")
+            return None
+
+    def fetch(self) -> list[VehicleReading]:
+        typed_body = [("busList[tram][]", line) for line in self._tram_lines] + [
+            ("busList[bus][]", line) for line in self._bus_lines
+        ]
+        raw = self._post(typed_body)
+
+        if not raw:
+            untyped_body = [
+                ("busList[][]", line) for line in (*self._tram_lines, *self._bus_lines)
+            ]
+            raw = self._post(untyped_body)
+
+        if not raw:
+            return []
+
+        now = datetime.now(timezone.utc)
+        if self._recorder is not None:
+            self._recorder.record(raw, now)
+        return _parse_raw(raw, now)
+
+
+class ReplaySource:
+    """Replays a recorded JSONL session, preserving the original gaps between reads."""
+
+    def __init__(self, recordings_dir: Path, replay_file: Path | None, speed: float = 1.0) -> None:
+        path = replay_file or self._latest_recording(recordings_dir)
+        self._entries = self._load(path)
+        self._speed = speed
+        self._index = 0
+        self._last_recorded_at: datetime | None = None
+
+    @staticmethod
+    def _latest_recording(recordings_dir: Path) -> Path:
+        files = sorted(recordings_dir.glob("vehicle_positions_*.jsonl"))
+        if not files:
+            raise FileNotFoundError(f"No recordings found in {recordings_dir}")
+        return files[-1]
+
+    @staticmethod
+    def _load(path: Path) -> list[dict]:
+        with path.open(encoding="utf-8") as f:
+            return [json.loads(line) for line in f if line.strip()]
+
+    def fetch(self) -> list[VehicleReading]:
+        if self._index >= len(self._entries):
+            logger.info("Replay exhausted, looping back to the start")
+            self._index = 0
+            self._last_recorded_at = None
+
+        entry = self._entries[self._index]
+        self._index += 1
+        recorded_at = datetime.fromisoformat(entry["recorded_at"])
+
+        if self._last_recorded_at is not None and self._speed > 0:
+            gap_s = (recorded_at - self._last_recorded_at).total_seconds() / self._speed
+            if gap_s > MAX_REPLAY_GAP_S:
+                logger.info(
+                    "Replay gap of %.0fs capped at %.0fs", gap_s, MAX_REPLAY_GAP_S
+                )
+                gap_s = MAX_REPLAY_GAP_S
+            if gap_s > 0:
+                time.sleep(gap_s)
+        self._last_recorded_at = recorded_at
+
+        return _parse_raw(entry["raw"], recorded_at)
+
+
+def build_mpk_source(config: Config, tram_lines: list[str], bus_lines: list[str]) -> MpkSource:
+    return MpkSource(
+        tram_lines=tram_lines,
+        bus_lines=bus_lines,
+        timeout_s=config.http_timeout_s,
+        recorder=Recorder(config.recordings_dir, retention_days=config.recording_retention_days),
+    )
+
+
+def build_replay_source(config: Config) -> ReplaySource:
+    return ReplaySource(
+        recordings_dir=config.recordings_dir,
+        replay_file=config.replay_file,
+        speed=config.replay_speed,
+    )

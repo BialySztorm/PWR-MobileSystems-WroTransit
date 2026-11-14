@@ -61,6 +61,53 @@ def test_get_stop_departures_returns_upcoming_trip(
     assert body[0]["departure_time_s"] == 90000
 
 
+def test_get_stop_departures_includes_post_midnight_trip_from_yesterdays_calendar(
+    client: TestClient, db_session: Session
+) -> None:
+    """GTFS allows departure_time_s > 86400 for a night trip that keeps running past
+    midnight - that time is relative to the PREVIOUS service day's calendar, not today's."""
+    today = date.today()
+    yesterday_weekday = WEEKDAY_COLUMNS[(today.weekday() - 1) % 7]
+    active_weekdays = {col: False for col in WEEKDAY_COLUMNS}
+    active_weekdays[yesterday_weekday] = True
+
+    stop = Stop(
+        stop_id="s", stop_code="s", name="Rynek", geom=WKTElement("POINT(17.03 51.11)", srid=4326)
+    )
+    db_session.add_all(
+        [
+            stop,
+            Route(route_id="N1", short_name="N1", long_name=None, type=3),
+            Calendar(
+                service_id="svc-night",
+                start_date=today - timedelta(days=2),
+                end_date=today + timedelta(days=1),
+                **active_weekdays,
+            ),
+            Trip(
+                trip_id="night1",
+                route_id="N1",
+                service_id="svc-night",
+                direction_id=0,
+                headsign="Psie Pole",
+            ),
+        ]
+    )
+    db_session.flush()
+    # 172799s = 86400 + 86399: relative to yesterday's midnight, that's always still ahead
+    # of "now" no matter the real time-of-day (max real now_s is 86399).
+    db_session.add(
+        StopTime(trip_id="night1", stop_sequence=0, stop_id="s", arrival_time_s=172799, departure_time_s=172799)
+    )
+    db_session.commit()
+
+    response = client.get(f"/stops/{stop.stop_id}/departures")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert any(d["route_short_name"] == "N1" and d["headsign"] == "Psie Pole" for d in body)
+
+
 def test_get_stop_departures_excludes_inactive_service(
     client: TestClient, db_session: Session
 ) -> None:

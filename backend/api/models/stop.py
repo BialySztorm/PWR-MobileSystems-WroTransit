@@ -1,4 +1,5 @@
 from geoalchemy2 import Geometry
+from geoalchemy2.elements import WKBElement
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,4 +12,4 @@ class Stop(Base):
     stop_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     stop_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     name: Mapped[str] = mapped_column(String(120))
-    geom: Mapped[str] = mapped_column(Geometry(geometry_type="POINT", srid=4326))
+    geom: Mapped[WKBElement] = mapped_column(Geometry(geometry_type="POINT", srid=4326))
