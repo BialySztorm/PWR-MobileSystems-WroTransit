@@ -26,7 +26,17 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.monotonic()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (time.monotonic() - start) * 1000
+        logger.exception(
+            "%s %s -> unhandled exception (%.1f ms)",
+            request.method,
+            request.url.path,
+            duration_ms,
+        )
+        raise
     duration_ms = (time.monotonic() - start) * 1000
     logger.info(
         "%s %s -> %d (%.1f ms)",
