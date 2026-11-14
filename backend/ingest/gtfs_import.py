@@ -58,21 +58,34 @@ def _time_to_seconds(value: str) -> int:
     return hours * 3600 + minutes * 60 + seconds
 
 
+def _map_rows(file_label: str, rows: list[dict], row_fn) -> list[dict]:
+    """Applies row_fn to every row, turning a KeyError/ValueError on one bad row (a
+    missing required field, an unparsable number) into an error that names the file and
+    row instead of a bare traceback with no idea which of possibly a million rows failed."""
+    mapped = []
+    for i, r in enumerate(rows):
+        try:
+            mapped.append(row_fn(r))
+        except (KeyError, ValueError) as exc:
+            raise ValueError(f"{file_label}: malformed row {i}: {exc} (row={r!r})") from exc
+    return mapped
+
+
 def _import_stops(archive: zipfile.ZipFile, conn) -> int:
     """Upserted, never deleted - vehicle_positions/vehicle_state/favourite_stops
     reference stops by stop_id and must survive a re-import unaffected."""
     rows = _read_rows(archive, "stops.txt")
-    stmt = pg_insert(Stop).values(
-        [
-            {
-                "stop_id": r["stop_id"],
-                "stop_code": r.get("stop_code") or None,
-                "name": r["stop_name"],
-                "geom": f"SRID=4326;POINT({r['stop_lon']} {r['stop_lat']})",
-            }
-            for r in rows
-        ]
+    values = _map_rows(
+        "stops.txt",
+        rows,
+        lambda r: {
+            "stop_id": r["stop_id"],
+            "stop_code": r.get("stop_code") or None,
+            "name": r["stop_name"],
+            "geom": f"SRID=4326;POINT({float(r['stop_lon'])} {float(r['stop_lat'])})",
+        },
     )
+    stmt = pg_insert(Stop).values(values)
     stmt = stmt.on_conflict_do_update(
         index_elements=[Stop.stop_id],
         set_={
@@ -89,17 +102,17 @@ def _import_routes(archive: zipfile.ZipFile, conn) -> int:
     """Upserted, never deleted - vehicle_state/favourite_lines reference routes by
     route_id and must survive a re-import unaffected."""
     rows = _read_rows(archive, "routes.txt")
-    stmt = pg_insert(Route).values(
-        [
-            {
-                "route_id": r["route_id"],
-                "short_name": r["route_short_name"],
-                "long_name": r.get("route_long_name") or None,
-                "type": int(r["route_type"]),
-            }
-            for r in rows
-        ]
+    values = _map_rows(
+        "routes.txt",
+        rows,
+        lambda r: {
+            "route_id": r["route_id"],
+            "short_name": r["route_short_name"],
+            "long_name": r.get("route_long_name") or None,
+            "type": int(r["route_type"]),
+        },
     )
+    stmt = pg_insert(Route).values(values)
     stmt = stmt.on_conflict_do_update(
         index_elements=[Route.route_id],
         set_={
@@ -114,24 +127,23 @@ def _import_routes(archive: zipfile.ZipFile, conn) -> int:
 
 def _import_calendar(archive: zipfile.ZipFile, conn) -> int:
     rows = _read_rows(archive, "calendar.txt")
-    conn.execute(
-        insert(Calendar),
-        [
-            {
-                "service_id": r["service_id"],
-                "monday": r["monday"] == "1",
-                "tuesday": r["tuesday"] == "1",
-                "wednesday": r["wednesday"] == "1",
-                "thursday": r["thursday"] == "1",
-                "friday": r["friday"] == "1",
-                "saturday": r["saturday"] == "1",
-                "sunday": r["sunday"] == "1",
-                "start_date": r["start_date"],
-                "end_date": r["end_date"],
-            }
-            for r in rows
-        ],
+    values = _map_rows(
+        "calendar.txt",
+        rows,
+        lambda r: {
+            "service_id": r["service_id"],
+            "monday": r["monday"] == "1",
+            "tuesday": r["tuesday"] == "1",
+            "wednesday": r["wednesday"] == "1",
+            "thursday": r["thursday"] == "1",
+            "friday": r["friday"] == "1",
+            "saturday": r["saturday"] == "1",
+            "sunday": r["sunday"] == "1",
+            "start_date": r["start_date"],
+            "end_date": r["end_date"],
+        },
     )
+    conn.execute(insert(Calendar), values)
     return len(rows)
 
 
@@ -139,30 +151,35 @@ def _import_calendar_dates(archive: zipfile.ZipFile, conn) -> int:
     rows = _read_rows(archive, "calendar_dates.txt")
     if not rows:
         return 0
-    conn.execute(
-        insert(CalendarDate),
-        [
-            {
-                "service_id": r["service_id"],
-                "date": r["date"],
-                "exception_type": int(r["exception_type"]),
-            }
-            for r in rows
-        ],
+    values = _map_rows(
+        "calendar_dates.txt",
+        rows,
+        lambda r: {
+            "service_id": r["service_id"],
+            "date": r["date"],
+            "exception_type": int(r["exception_type"]),
+        },
     )
+    conn.execute(insert(CalendarDate), values)
     return len(rows)
 
 
 def _import_shapes(archive: zipfile.ZipFile, conn) -> int:
     rows = _read_rows(archive, "shapes.txt")
-    rows.sort(key=lambda r: (r["shape_id"], int(r["shape_pt_sequence"])))
+    try:
+        rows.sort(key=lambda r: (r["shape_id"], int(r["shape_pt_sequence"])))
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"shapes.txt: malformed row: {exc}") from exc
 
     shapes = []
     for shape_id, points in groupby(rows, key=lambda r: r["shape_id"]):
-        coords = [(float(p["shape_pt_lon"]), float(p["shape_pt_lat"])) for p in points]
-        shapes.append(
-            {"shape_id": shape_id, "geom": f"SRID=4326;{LineString(coords).wkt}"}
-        )
+        try:
+            coords = [(float(p["shape_pt_lon"]), float(p["shape_pt_lat"])) for p in points]
+            shapes.append(
+                {"shape_id": shape_id, "geom": f"SRID=4326;{LineString(coords).wkt}"}
+            )
+        except (KeyError, ValueError) as exc:
+            raise ValueError(f"shapes.txt: malformed shape {shape_id!r}: {exc}") from exc
 
     conn.execute(insert(Shape), shapes)
     return len(shapes)
@@ -170,20 +187,19 @@ def _import_shapes(archive: zipfile.ZipFile, conn) -> int:
 
 def _import_trips(archive: zipfile.ZipFile, conn) -> int:
     rows = _read_rows(archive, "trips.txt")
-    conn.execute(
-        insert(Trip),
-        [
-            {
-                "trip_id": r["trip_id"],
-                "route_id": r["route_id"],
-                "service_id": r["service_id"],
-                "direction_id": int(r["direction_id"]) if r.get("direction_id") else None,
-                "shape_id": r.get("shape_id") or None,
-                "headsign": r.get("trip_headsign") or None,
-            }
-            for r in rows
-        ],
+    values = _map_rows(
+        "trips.txt",
+        rows,
+        lambda r: {
+            "trip_id": r["trip_id"],
+            "route_id": r["route_id"],
+            "service_id": r["service_id"],
+            "direction_id": int(r["direction_id"]) if r.get("direction_id") else None,
+            "shape_id": r.get("shape_id") or None,
+            "headsign": r.get("trip_headsign") or None,
+        },
     )
+    conn.execute(insert(Trip), values)
     return len(rows)
 
 
@@ -198,15 +214,20 @@ def _import_stop_times(archive: zipfile.ZipFile, raw_conn) -> int:
             "FROM STDIN"
         ) as copy:
             for r in reader:
-                copy.write_row(
-                    (
-                        r["trip_id"],
-                        int(r["stop_sequence"]),
-                        r["stop_id"],
-                        _time_to_seconds(r["arrival_time"]),
-                        _time_to_seconds(r["departure_time"]),
+                try:
+                    copy.write_row(
+                        (
+                            r["trip_id"],
+                            int(r["stop_sequence"]),
+                            r["stop_id"],
+                            _time_to_seconds(r["arrival_time"]),
+                            _time_to_seconds(r["departure_time"]),
+                        )
                     )
-                )
+                except (KeyError, ValueError) as exc:
+                    raise ValueError(
+                        f"stop_times.txt: malformed row {count}: {exc} (row={r!r})"
+                    ) from exc
                 count += 1
     return count
 
