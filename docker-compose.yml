@@ -30,7 +30,11 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg://wrotransit:wrotransit@db:5432/wrotransit
-      SOURCE: mpk
+      # SOURCE (mpk|replay) and the REPLAY_* vars are read from .env, NOT hardcoded here -
+      # an `environment:` entry would always win over .env, making SOURCE=replay in .env
+      # impossible to use. ingest/config.py defaults to "mpk" when unset.
+    volumes:
+      - ./backend/data/recordings:/app/data/recordings
     depends_on:
       - db
 
