@@ -7,9 +7,10 @@ reproduce a session later for tests/demo without hitting the network.
 """
 import json
 import logging
+import ssl
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlencode
@@ -21,6 +22,22 @@ from ingest.config import Config
 logger = logging.getLogger(__name__)
 
 MPK_URL = "https://mpk.wroc.pl/bus_position"
+
+# A recorded session can span an overnight gap (polling stopped, resumed next morning);
+# without a cap, replaying that gap verbatim would block the only thread in the ingest
+# loop for hours, looking exactly like a hung container.
+MAX_REPLAY_GAP_S = 60.0
+
+
+def _is_tls_verification_failure(exc: BaseException) -> bool:
+    """Walks the exception chain for the actual ssl error httpx wraps, falling back to a
+    message match only if that's not available (e.g. a different TLS backend)."""
+    cause: BaseException | None = exc
+    while cause is not None:
+        if isinstance(cause, ssl.SSLCertVerificationError):
+            return True
+        cause = cause.__cause__ or cause.__context__
+    return "certificate verify failed" in str(exc).lower()
 
 
 @dataclass(frozen=True)
@@ -58,10 +75,13 @@ def _parse_raw(raw: list[dict], recorded_at: datetime) -> list[VehicleReading]:
 
 
 class Recorder:
-    """Appends every raw MPK response to a dated JSONL file for later replay."""
+    """Appends every raw MPK response to a dated JSONL file for later replay, and prunes
+    files older than `retention_days` (docs/Specifications.md: ~7 days is enough for
+    replay/analysis - keeping them all forever would grow unbounded)."""
 
-    def __init__(self, recordings_dir: Path) -> None:
+    def __init__(self, recordings_dir: Path, retention_days: int = 7) -> None:
         self._recordings_dir = recordings_dir
+        self._retention_days = retention_days
 
     def record(self, raw: list[dict], timestamp: datetime) -> None:
         self._recordings_dir.mkdir(parents=True, exist_ok=True)
@@ -69,6 +89,18 @@ class Recorder:
         line = json.dumps({"recorded_at": timestamp.isoformat(), "raw": raw})
         with path.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
+        self._prune_old_recordings(timestamp)
+
+    def _prune_old_recordings(self, now: datetime) -> None:
+        cutoff = now - timedelta(days=self._retention_days)
+        for old_path in self._recordings_dir.glob("vehicle_positions_*.jsonl"):
+            date_part = old_path.stem.removeprefix("vehicle_positions_")
+            try:
+                file_date = datetime.strptime(date_part, "%Y%m%d").replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+            if file_date < cutoff:
+                old_path.unlink(missing_ok=True)
 
 
 class MpkSource:
@@ -85,6 +117,12 @@ class MpkSource:
         self._bus_lines = bus_lines
         self._timeout_s = timeout_s
         self._recorder = recorder
+
+    def update_lines(self, tram_lines: list[str], bus_lines: list[str]) -> None:
+        """Lets the caller refresh the polled line lists periodically (e.g. after a GTFS
+        re-import adds/renumbers lines) without restarting the process."""
+        self._tram_lines = tram_lines
+        self._bus_lines = bus_lines
 
     def _post(self, body: list[tuple[str, str]]) -> list[dict] | None:
         try:
@@ -104,7 +142,7 @@ class MpkSource:
                 return None
             return data
         except httpx.ConnectError as exc:
-            if "certificate verify failed" in str(exc).lower():
+            if _is_tls_verification_failure(exc):
                 raise
             logger.warning("MPK request failed: %s", exc)
             return None
@@ -170,6 +208,11 @@ class ReplaySource:
 
         if self._last_recorded_at is not None and self._speed > 0:
             gap_s = (recorded_at - self._last_recorded_at).total_seconds() / self._speed
+            if gap_s > MAX_REPLAY_GAP_S:
+                logger.info(
+                    "Replay gap of %.0fs capped at %.0fs", gap_s, MAX_REPLAY_GAP_S
+                )
+                gap_s = MAX_REPLAY_GAP_S
             if gap_s > 0:
                 time.sleep(gap_s)
         self._last_recorded_at = recorded_at
@@ -182,7 +225,7 @@ def build_mpk_source(config: Config, tram_lines: list[str], bus_lines: list[str]
         tram_lines=tram_lines,
         bus_lines=bus_lines,
         timeout_s=config.http_timeout_s,
-        recorder=Recorder(config.recordings_dir),
+        recorder=Recorder(config.recordings_dir, retention_days=config.recording_retention_days),
     )
 
 

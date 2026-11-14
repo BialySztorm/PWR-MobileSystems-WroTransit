@@ -51,6 +51,8 @@ Config (env vars, see `ingest/config.py`):
 | `RECORDINGS_DIR` | `backend/data/recordings` | where raw MPK responses are recorded / read from for replay |
 | `REPLAY_FILE` | newest file in `RECORDINGS_DIR` | explicit recording to replay |
 | `REPLAY_SPEED` | `1.0` | replay speed multiplier |
+| `RECORDING_RETENTION_DAYS` | `7` | recordings older than this are deleted automatically |
+| `LINES_REFRESH_INTERVAL_S` | `3600` | how often the polled tram/bus line lists are re-read from `routes` (so a GTFS re-import doesn't need a restart to pick up new lines) |
 
 ## Logging
 
@@ -70,3 +72,13 @@ PostGIS functions (`ST_X`/`ST_Y`/`ST_DWithin`) that SQLite doesn't have. Point t
 dedicated test database via `TEST_DATABASE_URL`
 (default `postgresql+psycopg://wrotransit:wrotransit@localhost:5432/wrotransit_test`);
 see the root README for how to create it.
+
+## Troubleshooting
+
+`alembic upgrade head` fails with `Can't locate revision identified by
+'a1f0c9d8b3e1'`: that revision was replaced (not extended) by `b2c1a7e4f9d3` back when the
+schema moved from a simplified model to the full GTFS one — a DB that was migrated before
+that point has no path forward. Either drop and recreate the database (`docker compose up
+-d db` against a fresh volume) or, if you need to keep its data,
+`alembic -c db/migrations/alembic.ini stamp b2c1a7e4f9d3` to tell Alembic the schema already
+matches that revision, then `upgrade head` as usual.

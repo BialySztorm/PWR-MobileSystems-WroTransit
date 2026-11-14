@@ -1,3 +1,5 @@
+import ssl
+from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode
 
 import httpx
@@ -113,6 +115,38 @@ def test_mpk_source_reraises_tls_verification_failure(
 
     with pytest.raises(httpx.ConnectError):
         source.fetch()
+
+
+def test_mpk_source_reraises_tls_failure_even_without_the_exact_message_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Different OpenSSL/platform builds phrase a cert failure differently - the real
+    signal is the wrapped ssl.SSLCertVerificationError, not a fixed message substring."""
+
+    def fake_post(self: httpx.Client, url: str, content=None, headers=None):
+        try:
+            raise ssl.SSLCertVerificationError("some platform-specific wording")
+        except ssl.SSLCertVerificationError as ssl_exc:
+            raise httpx.ConnectError("unrelated-looking wrapper message") from ssl_exc
+
+    monkeypatch.setattr(httpx.Client, "post", fake_post)
+
+    source = MpkSource(tram_lines=["4"], bus_lines=[])
+
+    with pytest.raises(httpx.ConnectError):
+        source.fetch()
+
+
+def test_recorder_prunes_recordings_older_than_retention(tmp_path) -> None:
+    now = datetime(2026, 1, 10, tzinfo=timezone.utc)
+    old_path = tmp_path / "vehicle_positions_20260101.jsonl"
+    old_path.write_text('{"recorded_at": "2026-01-01T00:00:00+00:00", "raw": []}\n')
+
+    recorder = Recorder(tmp_path, retention_days=7)
+    recorder.record([{"name": "4", "type": "tram", "x": 1.0, "y": 2.0, "k": 1}], now)
+
+    assert not old_path.exists()
+    assert (tmp_path / "vehicle_positions_20260110.jsonl").exists()
 
 
 def test_repeated_key_body_round_trips_through_real_httpx() -> None:
