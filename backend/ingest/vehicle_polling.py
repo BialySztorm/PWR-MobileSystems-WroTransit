@@ -15,7 +15,14 @@ from api.models.route import Route
 from api.models.vehicle import VehiclePosition, VehicleState
 from ingest.config import Config, load_config
 from ingest.logging_config import configure_logging
-from ingest.sources import ReplaySource, VehicleReading, VehiclePositionSource, build_mpk_source, build_replay_source
+from ingest.sources import (
+    MpkSource,
+    ReplaySource,
+    VehicleReading,
+    VehiclePositionSource,
+    build_mpk_source,
+    build_replay_source,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -93,12 +100,29 @@ def run_polling_loop() -> None:
     source = build_source(config)
     logger.info("Starting vehicle polling loop (source=%s)", config.source)
 
+    last_lines_refresh = time.monotonic()
+
     while True:
         try:
             count = poll_vehicle_positions(source)
             logger.info("Polled %d vehicle position(s)", count)
         except Exception:
             logger.exception("Vehicle polling cycle failed, continuing")
+
+        if isinstance(source, MpkSource):
+            now = time.monotonic()
+            if now - last_lines_refresh >= config.lines_refresh_interval_s:
+                try:
+                    tram_lines, bus_lines = _fetch_lines()
+                    source.update_lines(tram_lines, bus_lines)
+                    logger.info(
+                        "Refreshed line lists (%d tram, %d bus)",
+                        len(tram_lines),
+                        len(bus_lines),
+                    )
+                except Exception:
+                    logger.exception("Failed to refresh line lists, keeping the old ones")
+                last_lines_refresh = now
 
         if not isinstance(source, ReplaySource):
             time.sleep(config.poll_interval_s)
