@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from api.bbox import parse_bbox
 from api.db.session import get_db
 from api.schemas.departure import DepartureRead
 from api.schemas.stop import StopNearbyRead, StopRead
@@ -34,7 +35,7 @@ def list_stops(
     limit = 100
 
     if bbox:
-        min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox.split(","))
+        min_lon, min_lat, max_lon, max_lat = parse_bbox(bbox)
         conditions.append(
             "ST_Intersects(s.geom, ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326))"
         )
@@ -73,8 +74,8 @@ def list_stops(
 def list_stops_nearby(
     lat: float = Query(...),
     lon: float = Query(...),
-    radius: float = Query(default=500, le=5000, description="Search radius in meters"),
-    limit: int = Query(default=20, le=100),
+    radius: float = Query(default=500, gt=0, le=5000, description="Search radius in meters"),
+    limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     stmt = text(
