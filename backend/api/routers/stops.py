@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from api.db.session import get_db
 from api.schemas.departure import DepartureRead
-from api.schemas.stop import StopRead
+from api.schemas.stop import StopNearbyRead, StopRead
 
 router = APIRouter(prefix="/stops", tags=["stops"])
 
@@ -67,6 +67,31 @@ def list_stops(
             f"ORDER BY s.name LIMIT {limit}"
         )
     return [dict(row._mapping) for row in db.execute(stmt, params)]
+
+
+@router.get("/nearby", response_model=list[StopNearbyRead])
+def list_stops_nearby(
+    lat: float = Query(...),
+    lon: float = Query(...),
+    radius: float = Query(default=500, le=5000, description="Search radius in meters"),
+    limit: int = Query(default=20, le=100),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    stmt = text(
+        """
+        SELECT stop_id, stop_code, name, ST_Y(geom) AS lat, ST_X(geom) AS lon,
+               '{}'::int[] AS modes,
+               ST_Distance(geom::geography, ST_MakePoint(:lon, :lat)::geography) AS distance_m
+        FROM stops
+        WHERE ST_DWithin(geom::geography, ST_MakePoint(:lon, :lat)::geography, :radius)
+        ORDER BY distance_m
+        LIMIT :limit
+        """
+    )
+    return [
+        dict(row._mapping)
+        for row in db.execute(stmt, {"lat": lat, "lon": lon, "radius": radius, "limit": limit})
+    ]
 
 
 @router.get("/{stop_id}", response_model=StopRead)
