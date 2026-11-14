@@ -95,7 +95,14 @@ class MpkSource:
             with httpx.Client(timeout=self._timeout_s) as client:
                 response = client.post(MPK_URL, content=encoded_body, headers=headers)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            if not isinstance(data, list):
+                # A "successful" response that isn't the expected array (e.g. an error
+                # object) must not be treated as "zero vehicles" nor recorded as if it
+                # were real data - force the typed/untyped fallback instead.
+                logger.warning("MPK response was not a JSON array: %r", type(data))
+                return None
+            return data
         except httpx.ConnectError as exc:
             if "certificate verify failed" in str(exc).lower():
                 raise
