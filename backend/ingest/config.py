@@ -18,14 +18,21 @@ class Config:
     """Explicit recording to replay; defaults to the newest file in recordings_dir."""
 
 
+def _env_float(name: str, default: float) -> float:
+    # os.environ.get(name, default) would not apply the default for a variable that is
+    # set but empty (e.g. a half-filled `.env` line) - treat that the same as unset.
+    value = os.environ.get(name)
+    return float(value) if value else default
+
+
 def load_config() -> Config:
-    recordings_dir = Path(os.environ.get("RECORDINGS_DIR", str(DEFAULT_RECORDINGS_DIR)))
+    recordings_dir = Path(os.environ.get("RECORDINGS_DIR") or str(DEFAULT_RECORDINGS_DIR))
     replay_file = os.environ.get("REPLAY_FILE")
     return Config(
-        source=os.environ.get("SOURCE", "mpk"),
-        poll_interval_s=float(os.environ.get("POLL_INTERVAL_S", "10")),
-        http_timeout_s=float(os.environ.get("HTTP_TIMEOUT_S", "5")),
+        source=os.environ.get("SOURCE") or "mpk",
+        poll_interval_s=_env_float("POLL_INTERVAL_S", 10.0),
+        http_timeout_s=_env_float("HTTP_TIMEOUT_S", 5.0),
         recordings_dir=recordings_dir,
-        replay_speed=float(os.environ.get("REPLAY_SPEED", "1.0")),
+        replay_speed=_env_float("REPLAY_SPEED", 1.0),
         replay_file=Path(replay_file) if replay_file else None,
     )
